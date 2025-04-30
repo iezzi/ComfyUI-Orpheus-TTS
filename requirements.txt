@@ -1,0 +1,8 @@
+torch
+numpy
+soundfile
+transformers
+huggingface_hub
+nltk>=3.8.0
+snac==0.1.0
+librosa>=0.10.2
