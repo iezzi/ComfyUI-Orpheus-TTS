@@ -1,7 +1,7 @@
 # ComfyUI-Orpheus-TTS
 This extension adds high-quality Text-to-Speech capabilities to ComfyUI using the Orpheus TTS model. Create natural-sounding voices with emotional expressions, multilingual support, and audio effects.
 
-![image](https://github.com/user-attachments/assets/29d9c3d1-67f7-49cd-a032-5ae51d0fab63)
+![image](https://github.com/user-attachments/assets/3e167915-2ac3-4dbe-8b34-e65e6df2a94c)
 
 ## Features
 
@@ -12,6 +12,10 @@ This extension adds high-quality Text-to-Speech capabilities to ComfyUI using th
 - 🎛️ Professional audio effects:
   - Pitch shifting (-12 to +12 semitones)
   - Speed adjustment (0.5x to 2.0x speed)
+  - Volume control with anti-clipping protection
+  - Audio normalization option
+  - Reverb with adjustable room size and amount
+  - Echo with configurable delay and decay
 - 🌐 Optional support for private Hugging Face models
 
 ## Installation
@@ -90,36 +94,81 @@ Loads the required models for Orpheus TTS.
 **Outputs:**
 - `model`: Model reference to be passed to the generate node
 
-### Orpheus TTS Generate
+  ## Paralinguistic Elements
 
-Generates speech from text input.
+You can add expressive elements to the speech by inserting these tags:
 
-**Inputs:**
-- `model`: Model reference from the loader node
-- `text`: Text to convert to speech
-- `voice`: Voice selection (tara, leah, jess, leo, dan, mia, zac, zoe, etc.)
-- `element`: Paralinguistic element to insert (laugh, chuckle, sigh, etc.)
-- `element_position`: Where to insert the element (none, append, prepend)
-- `temperature`: Controls randomness (0.1-1.5)
-- `top_p`: Controls diversity (0.1-1.0)
-- `repetition_penalty`: Penalizes repetition (1.0-2.0)
-- `max_new_tokens`: Maximum generation length (100-4000)
+- **`<laugh>`** - Natural laughter
+- **`<chuckle>`** - Light, subtle laughter
+- **`<sigh>`** - Exhaling with emotion
+- **`<cough>`** - Clearing throat
+- **`<sniffle>`** - Subtle nasal sound
+- **`<groan>`** - Low, grumbling sound
+- **`<yawn>`** - Tired exhale
+- **`<gasp>`** - Sudden intake of breath
 
-**Outputs:**
-- `audio`: Generated audio that can be played, saved, or further processed
+### Example:
+```
+I can't believe it! <laugh> That's the funniest thing I've heard all day.
+<sigh> But now I need to get back to work.
+```
 
-### Orpheus Audio Effects
+## Audio Effect Tips
 
-Applies pitch shifting and speed adjustment to audio using SoX.
+### Volume Control
 
-**Inputs:**
-- `audio`: Audio input from TTS Generate node
-- `pitch_shift`: Semitone adjustment (-12 to +12)
-- `speed_factor`: Playback speed (0.5 to 2.0)
-- `sox_path` (optional): Path to SoX executable (default works for typical Windows installations)
+- **Gain Control**: Use `gain_db` to increase or decrease volume without distortion
+  - Positive values (0 to +20 dB): Increase volume with automatic clipping prevention
+  - Negative values (-20 to 0 dB): Decrease volume
+  - For best results with multiple effects, set gain last in your workflow
 
-**Outputs:**
-- `audio`: Processed audio with effects applied
+- **Normalization**: Enable `normalize_audio` to automatically balance levels
+  - Great for ensuring consistent volume across different voice samples
+  - Applied before other effects for best results
+
+### Reverb
+
+Reverb adds a sense of space to your audio. Here are some suggested settings:
+
+- **Small Room**: reverb_amount = 20, reverb_room_scale = 25
+- **Medium Room**: reverb_amount = 40, reverb_room_scale = 50
+- **Large Hall**: reverb_amount = 70, reverb_room_scale = 80
+- **Cathedral**: reverb_amount = 90, reverb_room_scale = 95
+
+### Echo
+
+Echo creates repeating sound reflections. Good settings to try:
+
+- **Subtle Echo**: echo_delay = 0.3, echo_decay = 0.3
+- **Moderate Echo**: echo_delay = 0.5, echo_decay = 0.5
+- **Canyon Echo**: echo_delay = 1.0, echo_decay = 0.7
+
+### Effect Combinations
+
+- **Phone Call**: pitch_shift = 0, speed_factor = 1.0, add_reverb = True, reverb_amount = 10, reverb_room_scale = 10
+- **Radio Announcer**: pitch_shift = -2, speed_factor = 0.9, add_reverb = True, reverb_amount = 20, gain_db = 3
+- **Stadium Announcement**: pitch_shift = 0, speed_factor = 1.0, add_reverb = True, reverb_amount = 60, add_echo = True, echo_delay = 0.8
+- **Child Voice**: pitch_shift = 4, speed_factor = 1.1, gain_db = 2
+- **Deep Voice**: pitch_shift = -4, speed_factor = 0.9, gain_db = -2
+
+## Paralinguistic Elements
+
+You can add expressive elements to the speech by inserting these tags:
+
+- **`<laugh>`** - Natural laughter
+- **`<chuckle>`** - Light, subtle laughter
+- **`<sigh>`** - Exhaling with emotion
+- **`<cough>`** - Clearing throat
+- **`<sniffle>`** - Subtle nasal sound
+- **`<groan>`** - Low, grumbling sound
+- **`<yawn>`** - Tired exhale
+- **`<gasp>`** - Sudden intake of breath
+
+### Example:
+```
+I can't believe it! <laugh> That's the funniest thing I've heard all day.
+<sigh> But now I need to get back to work.
+```
 
 ## Usage Examples
 
