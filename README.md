@@ -1,7 +1,7 @@
 # ComfyUI-Orpheus-TTS
 This extension adds high-quality Text-to-Speech capabilities to ComfyUI using the Orpheus TTS model. Create natural-sounding voices with emotional expressions, multilingual support, and audio effects.
 
-![Orpheus TTS Banner](https://github.com/yourusername/ComfyUI-Orpheus-TTS/raw/main/images/banner.jpg)
+![image](https://github.com/user-attachments/assets/29d9c3d1-67f7-49cd-a032-5ae51d0fab63)
 
 ## Features
 
@@ -131,7 +131,6 @@ Applies pitch shifting and speed adjustment to audio using SoX.
 4. Enter your text and select voice options
 5. Connect to "Preview Audio" node to hear the result
 
-![Basic TTS Workflow](https://github.com/yourusername/ComfyUI-Orpheus-TTS/raw/main/images/basic_workflow.jpg)
 
 ### Advanced: TTS with Audio Effects
 
@@ -141,87 +140,26 @@ Applies pitch shifting and speed adjustment to audio using SoX.
 4. Connect in sequence: Model Loader → Generate → Audio Effects → Preview Audio
 5. Adjust pitch shift and speed factor sliders
 
-![Advanced TTS Workflow](https://github.com/yourusername/ComfyUI-Orpheus-TTS/raw/main/images/advanced_workflow.jpg)
 
 ## Paralinguistic Elements
 
 You can add expressive elements to the speech by inserting these tags:
 
-|
- Element 
-|
- Tag 
-|
- Description 
-|
-|
----------
-|
------
-|
--------------
-|
-|
- Laugh 
-|
-`<laugh>`
-|
- Natural laughter 
-|
-|
- Chuckle 
-|
-`<chuckle>`
-|
- Light, subtle laughter 
-|
-|
- Sigh 
-|
-`<sigh>`
-|
- Exhaling with emotion 
-|
-|
- Cough 
-|
-`<cough>`
-|
- Clearing throat 
-|
-|
- Sniffle 
-|
-`<sniffle>`
-|
- Subtle nasal sound 
-|
-|
- Groan 
-|
-`<groan>`
-|
- Low, grumbling sound 
-|
-|
- Yawn 
-|
-`<yawn>`
-|
- Tired exhale 
-|
-|
- Gasp 
-|
-`<gasp>`
-|
- Sudden intake of breath 
-|
+- **`<laugh>`** - Natural laughter
+- **`<chuckle>`** - Light, subtle laughter
+- **`<sigh>`** - Exhaling with emotion
+- **`<cough>`** - Clearing throat
+- **`<sniffle>`** - Subtle nasal sound
+- **`<groan>`** - Low, grumbling sound
+- **`<yawn>`** - Tired exhale
+- **`<gasp>`** - Sudden intake of breath
 
 ### Example:
 ```
 I can't believe it! <laugh> That's the funniest thing I've heard all day.
+<sigh> But now I need to get back to work.
 ```
+
 
 ## SoX Troubleshooting
 
