@@ -1,6 +1,6 @@
 """
-Direct Path SoX Audio Effects Node for Orpheus TTS in ComfyUI
-Uses explicit path to SoX executable for Windows compatibility
+Enhanced SoX Audio Effects Node for Orpheus TTS in ComfyUI
+Includes pitch, speed, reverb, echo, and correct gain control
 """
 
 import os
@@ -13,7 +13,7 @@ import shutil
 
 class OrpheusAudioEffects:
     """
-    ComfyUI Node for applying audio effects (pitch shift and speed adjustment) to TTS output
+    ComfyUI Node for applying audio effects (pitch, speed, reverb, echo, gain) to TTS output
     Uses explicit SoX path for Windows compatibility
     """
     @classmethod
@@ -27,7 +27,21 @@ class OrpheusAudioEffects:
                                "display": "slider", "label": "Speed Factor"})
             },
             "optional": {
-                "sox_path": ("STRING", {"default": "C:\\Program Files (x86)\\sox-14-4-2\\sox.exe"})
+                "sox_path": ("STRING", {"default": "C:\\Program Files (x86)\\sox-14-4-2\\sox.exe"}),
+                "gain_db": ("FLOAT", {"default": 0.0, "min": -20.0, "max": 20.0, "step": 0.5, 
+                         "display": "slider", "label": "Gain (dB)"}),
+                "use_limiter": ("BOOLEAN", {"default": True, "label": "Use Limiter for Gain"}),
+                "normalize_audio": ("BOOLEAN", {"default": False, "label": "Normalize Audio"}),
+                "add_reverb": ("BOOLEAN", {"default": False, "label": "Add Reverb"}),
+                "reverb_amount": ("FLOAT", {"default": 50, "min": 0, "max": 100, "step": 5, 
+                                "display": "slider", "label": "Reverb Amount"}),
+                "reverb_room_scale": ("FLOAT", {"default": 50, "min": 0, "max": 100, "step": 5, 
+                                    "display": "slider", "label": "Room Size"}),
+                "add_echo": ("BOOLEAN", {"default": False, "label": "Add Echo"}),
+                "echo_delay": ("FLOAT", {"default": 0.5, "min": 0.1, "max": 2.0, "step": 0.1, 
+                             "display": "slider", "label": "Echo Delay (seconds)"}),
+                "echo_decay": ("FLOAT", {"default": 0.5, "min": 0.1, "max": 0.9, "step": 0.1, 
+                             "display": "slider", "label": "Echo Decay"})
             }
         }
     
@@ -36,14 +50,22 @@ class OrpheusAudioEffects:
     FUNCTION = "process_audio"
     CATEGORY = "audio/effects"
     
-    def process_audio(self, audio, pitch_shift=0.0, speed_factor=1.0, sox_path="C:\\Program Files (x86)\\sox-14-4-2\\sox.exe"):
-        """Apply pitch shifting and speed adjustment to audio using direct SoX path"""
+    def process_audio(self, audio, pitch_shift=0.0, speed_factor=1.0, sox_path="C:\\Program Files (x86)\\sox-14-4-2\\sox.exe",
+                     gain_db=0.0, use_limiter=True, normalize_audio=False,
+                     add_reverb=False, reverb_amount=50, reverb_room_scale=50,
+                     add_echo=False, echo_delay=0.5, echo_decay=0.5):
+        """Apply audio effects to audio using SoX"""
         if audio is None:
             print("No audio data to process")
             return (None,)
         
         # Check if no effects are needed
-        if abs(pitch_shift) < 0.01 and abs(speed_factor - 1.0) < 0.01:
+        if (abs(pitch_shift) < 0.01 and 
+            abs(speed_factor - 1.0) < 0.01 and 
+            abs(gain_db) < 0.01 and
+            not normalize_audio and
+            not add_reverb and 
+            not add_echo):
             print("No effects to apply, returning original audio")
             return (audio,)
         
@@ -89,6 +111,12 @@ class OrpheusAudioEffects:
             print(f"Processing audio with SoX at: {sox_path}")
             print(f"- Pitch shift: {pitch_shift} semitones")
             print(f"- Speed factor: {speed_factor}x")
+            print(f"- Gain: {gain_db} dB")
+            print(f"- Normalize: {normalize_audio}")
+            if add_reverb:
+                print(f"- Reverb: amount={reverb_amount}, room_scale={reverb_room_scale}")
+            if add_echo:
+                print(f"- Echo: delay={echo_delay}s, decay={echo_decay}")
             
             # Create a temporary directory for this operation
             temp_dir = tempfile.mkdtemp(prefix="orpheus_sox_")
@@ -109,15 +137,80 @@ class OrpheusAudioEffects:
                 # Create the SoX command with explicit parameters
                 sox_cmd = [sox_path, input_path, output_path]
                 
+                # Add effects in the order they should be applied
+                effects = []
+                
+                # 1. Normalize (if requested) - must be applied first
+                if normalize_audio:
+                    effects.extend(['gain', '-n'])
+                    print("Added normalize effect")
+                
+                # 2. Gain adjustment (if requested) with clipping prevention
+                if abs(gain_db) >= 0.01:
+                    if gain_db > 0 and use_limiter:
+                        # For positive gain with limiter, use -l option
+                        effects.extend(['gain', '-l', str(gain_db)])
+                        print(f"Added gain effect with limiter: {gain_db} dB")
+                    else:
+                        # For negative gain or no limiter
+                        effects.extend(['gain', str(gain_db)])
+                        print(f"Added gain effect: {gain_db} dB")
+                
+                # 3. Pitch shift (if requested)
                 if pitch_shift != 0:
                     # Convert semitones to cents
                     pitch_cents = int(pitch_shift * 100)
-                    sox_cmd.extend(['pitch', str(pitch_cents)])
+                    effects.extend(['pitch', str(pitch_cents)])
                     print(f"Added pitch effect: {pitch_cents} cents")
                 
+                # 4. Speed/tempo adjustment (if requested)
                 if speed_factor != 1.0:
-                    sox_cmd.extend(['tempo', '-s', str(speed_factor)])
+                    effects.extend(['tempo', '-s', str(speed_factor)])
                     print(f"Added tempo effect: {speed_factor}x")
+                
+                # 5. Reverb (if requested)
+                if add_reverb:
+                    # SoX reverb parameters: 
+                    # reverberance(0-100) HF-damping(0-100) room-scale(0-100) stereo-depth(0-100) pre-delay(0-500) wet-gain(-10-10)
+                    reverberance = int(reverb_amount)
+                    hf_damping = 50  # default
+                    room_scale = int(reverb_room_scale)
+                    stereo_depth = 50  # default
+                    pre_delay = 20  # default
+                    wet_gain = 0  # default
+                    
+                    effects.extend([
+                        'reverb',
+                        str(reverberance),
+                        str(hf_damping),
+                        str(room_scale),
+                        str(stereo_depth),
+                        str(pre_delay),
+                        str(wet_gain)
+                    ])
+                    print(f"Added reverb effect: {reverberance}% reverberance, {room_scale}% room scale")
+                
+                # 6. Echo (if requested)
+                if add_echo:
+                    # SoX echo parameters: gain-in gain-out delay decay
+                    gain_in = 0.8  # Input gain
+                    gain_out = 0.9  # Output gain
+                    delay_seconds = echo_delay
+                    delay_ms = int(delay_seconds * 1000)  # Convert to milliseconds
+                    decay = echo_decay
+                    
+                    effects.extend([
+                        'echo',
+                        str(gain_in),
+                        str(gain_out),
+                        str(delay_ms),
+                        str(decay)
+                    ])
+                    print(f"Added echo effect: {delay_ms}ms delay, {decay} decay")
+                
+                # Add the effects to the command if there are any
+                if effects:
+                    sox_cmd.extend(effects)
                 
                 # Print the full SoX command
                 print("Executing:", " ".join(sox_cmd))
