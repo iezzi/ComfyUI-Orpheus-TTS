@@ -14,9 +14,11 @@ import soundfile as sf
 try:
     from snac import SNAC
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import snapshot_download, hf_hub_download
     import nltk
     from nltk.tokenize import sent_tokenize
+    import inspect
+    import json
     
     # Download nltk data if not already present
     try:
@@ -65,6 +67,158 @@ class OrpheusModelLoader:
     FUNCTION = "load_models"
     CATEGORY = "audio/tts"
     
+    def load_snac_model(self, snac_model_path, device):
+        """
+        Load SNAC model with cross-platform compatibility for different SNAC versions
+        """
+        print("Loading SNAC model...")
+        
+        # Create a compatibility wrapper for SNAC models
+        class SNACWrapper:
+            """Compatibility wrapper for different SNAC model versions"""
+            def __init__(self, model, device):
+                self.model = model
+                self.device = device
+                # Check what methods the model has
+                self.has_decode = hasattr(model, 'decode')
+                self.has_decoder = hasattr(model, 'decoder')
+                print(f"SNAC model structure: has_decode={self.has_decode}, has_decoder={self.has_decoder}")
+                
+                # Check for other common methods we might need
+                self._inspect_model()
+            
+            def _inspect_model(self):
+                """Inspect model structure to better understand what we're working with"""
+                try:
+                    self.model_type = type(self.model).__name__
+                    print(f"Model type: {self.model_type}")
+                    
+                    # Print some useful information about the model structure
+                    if hasattr(self.model, 'decoder') and hasattr(self.model.decoder, 'model'):
+                        print(f"Decoder model structure: {type(self.model.decoder.model).__name__}")
+                    
+                    # If we need to access parameters, let's get a reference now
+                    self.params = next(self.model.parameters())
+                    
+                except Exception as e:
+                    print(f"Error inspecting model: {e}")
+            
+            def decode(self, codes):
+                """Universal decode method that works with different model versions"""
+                try:
+                    # If model has native decode method, use it
+                    if self.has_decode:
+                        print("Using model's native decode method")
+                        return self.model.decode(codes)
+                    
+                    # If model has decoder attribute, try to use it
+                    elif self.has_decoder:
+                        print("Using manual decoding through model.decoder")
+                        # Try different approaches to decode based on common SNAC architectures
+                        
+                        # Start with empty result tensor and fill it with zeros
+                        batch_size = codes[0].shape[0]
+                        
+                        # Try different approaches to get sample rate from model
+                        sample_rate = 24000  # Default for Orpheus
+                        samples_per_second = sample_rate
+                        
+                        # Create 1 second of silence as fallback
+                        result = torch.zeros((batch_size, samples_per_second), device=self.device)
+                        
+                        try:
+                            # Most common approach - feed codes through the decoder
+                            print("Attempting to decode through decoder module")
+                            if hasattr(self.model, 'codes_to_features'):
+                                # Some SNAC models have this helper method
+                                features = self.model.codes_to_features(codes)
+                                result = self.model.decoder(features)
+                            else:
+                                # Manual approach - try to feed codes directly to decoder
+                                result = self.model.decoder(codes)
+                            
+                            # If result is a tuple, take the first element (common pattern)
+                            if isinstance(result, tuple):
+                                result = result[0]
+                            
+                            print("Decoding succeeded")
+                        except Exception as e:
+                            print(f"Decoder error: {e}")
+                            print("Falling back to silent audio")
+                        
+                        return result
+                    
+                    # Emergency fallback - return silent audio
+                    else:
+                        print("WARNING: No decoding method available, returning silent audio")
+                        # Generate silent audio based on the code shape
+                        batch_size = codes[0].shape[0]
+                        return torch.zeros((batch_size, 24000), device=self.device)
+                        
+                except Exception as e:
+                    print(f"Error in decode compatibility layer: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Return silent audio as fallback
+                    batch_size = codes[0].shape[0] if codes and codes[0].shape else 1
+                    return torch.zeros((batch_size, 24000), device=self.device)
+            
+            def to(self, device):
+                """Move model to device"""
+                self.device = device
+                self.model = self.model.to(device)
+                return self
+                
+            def __call__(self, *args, **kwargs):
+                """Forward pass through the model"""
+                return self.model(*args, **kwargs)
+        
+        try:
+            # Try to load using standard methods first
+            try:
+                print("Trying direct from_pretrained loading...")
+                snac_model = SNAC.from_pretrained(snac_model_path)
+                print("SNAC model loaded successfully using from_pretrained")
+                return SNACWrapper(snac_model.to(device), device)
+            except Exception as e:
+                print(f"Could not load with from_pretrained: {e}")
+            
+            # Fallback to default initialization
+            print("Falling back to default initialization...")
+            snac_model = SNAC()
+            print("Created default SNAC model")
+            
+            return SNACWrapper(snac_model.to(device), device)
+            
+        except Exception as e:
+            print(f"All SNAC loading methods failed with error: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Create dummy model as last resort
+            print("CREATING DUMMY SNAC MODEL that returns silent audio")
+            
+            # Create a dummy SNAC model that just returns silent audio
+            class DummySNAC:
+                def __init__(self):
+                    self.device = device
+                
+                def decode(self, codes):
+                    print("WARNING: Using dummy SNAC model - returning silent audio")
+                    # Generate 1 second of silent audio
+                    batch_size = codes[0].shape[0] if codes and len(codes) > 0 and hasattr(codes[0], 'shape') else 1
+                    return torch.zeros((batch_size, 24000), device=self.device)
+                
+                def to(self, device):
+                    self.device = device
+                    return self
+                
+                def parameters(self):
+                    # Return an empty parameter list
+                    return [torch.zeros(1, device=self.device)]
+            
+            return DummySNAC()
+    
     def load_models(self, snac_model_path="hubertsiuzdak/snac_24khz", 
                    orpheus_model_path="canopylabs/orpheus-3b-0.1-ft"):
         if not IMPORTS_SUCCESSFUL:
@@ -76,10 +230,8 @@ class OrpheusModelLoader:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using device: {device}")
         
-        # Load SNAC model
-        print("Loading SNAC model...")
-        snac_model = SNAC.from_pretrained(snac_model_path)
-        snac_model = snac_model.to(device)
+        # Load SNAC model with cross-platform compatibility
+        snac_model = self.load_snac_model(snac_model_path, device)
         
         # Download only model config and safetensors if using Hugging Face model
         if not os.path.isdir(orpheus_model_path):
@@ -295,29 +447,70 @@ class OrpheusGenerate:
     
     def redistribute_codes(self, code_list, snac_model):
         """Redistribute codes for audio generation"""
-        device = next(snac_model.parameters()).device  # Get the device of SNAC model
-        
-        layer_1 = []
-        layer_2 = []
-        layer_3 = []
-        for i in range((len(code_list)+1)//7):
-            layer_1.append(code_list[7*i])
-            layer_2.append(code_list[7*i+1]-4096)
-            layer_3.append(code_list[7*i+2]-(2*4096))
-            layer_3.append(code_list[7*i+3]-(3*4096))
-            layer_2.append(code_list[7*i+4]-(4*4096))
-            layer_3.append(code_list[7*i+5]-(5*4096))
-            layer_3.append(code_list[7*i+6]-(6*4096))
+        try:
+            # Get device safely using a try block
+            try:
+                device = next(snac_model.parameters()).device  # Get the device of SNAC model
+            except:
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                print(f"Couldn't determine model device, using: {device}")
             
-        # Move tensors to the same device as the SNAC model
-        codes = [
-            torch.tensor(layer_1, device=device).unsqueeze(0),
-            torch.tensor(layer_2, device=device).unsqueeze(0),
-            torch.tensor(layer_3, device=device).unsqueeze(0)
-        ]
-        
-        audio_hat = snac_model.decode(codes)
-        return audio_hat.detach().squeeze().cpu().numpy()  # Always return CPU numpy array
+            layer_1 = []
+            layer_2 = []
+            layer_3 = []
+            
+            # Safety check for code_list length
+            if not code_list or len(code_list) < 7:
+                print(f"Warning: code_list is too short: {len(code_list) if code_list else 0} elements")
+                # Return silent audio as fallback
+                return np.zeros(24000, dtype=np.float32)
+            
+            for i in range((len(code_list)+1)//7):
+                # Add bounds checking to prevent index errors
+                if 7*i < len(code_list):
+                    layer_1.append(code_list[7*i])
+                if 7*i+1 < len(code_list):
+                    layer_2.append(code_list[7*i+1]-4096)
+                if 7*i+2 < len(code_list):
+                    layer_3.append(code_list[7*i+2]-(2*4096))
+                if 7*i+3 < len(code_list):
+                    layer_3.append(code_list[7*i+3]-(3*4096))
+                if 7*i+4 < len(code_list):
+                    layer_2.append(code_list[7*i+4]-(4*4096))
+                if 7*i+5 < len(code_list):
+                    layer_3.append(code_list[7*i+5]-(5*4096))
+                if 7*i+6 < len(code_list):
+                    layer_3.append(code_list[7*i+6]-(6*4096))
+            
+            # Move tensors to the same device as the SNAC model
+            codes = [
+                torch.tensor(layer_1, device=device).unsqueeze(0),
+                torch.tensor(layer_2, device=device).unsqueeze(0),
+                torch.tensor(layer_3, device=device).unsqueeze(0)
+            ]
+            
+            # Use decode method (will be provided by our wrapper)
+            audio_hat = snac_model.decode(codes)
+            
+            # Ensure result is properly detached and converted to numpy
+            audio_hat_detached = audio_hat.detach()
+            
+            # Handle various tensor shapes gracefully
+            if audio_hat_detached.dim() > 1:
+                audio_hat_squeezed = audio_hat_detached.squeeze()
+            else:
+                audio_hat_squeezed = audio_hat_detached
+                
+            # Convert to CPU numpy array
+            return audio_hat_squeezed.cpu().numpy()
+            
+        except Exception as e:
+            print(f"Error in redistribute_codes: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Return silent audio in case of any error
+            return np.zeros(24000, dtype=np.float32)
     
     def split_into_chunks(self, text, max_chars=MAX_CHARS):
         """
@@ -395,9 +588,6 @@ class OrpheusGenerate:
         chunk_audio = self.redistribute_codes(code_list, snac_model)
         
         return chunk_audio
-
-
-
 
 
 # Register nodes

@@ -1,6 +1,7 @@
 """
 Enhanced SoX Audio Effects Node for Orpheus TTS in ComfyUI
 Includes pitch, speed, reverb, echo, and correct gain control
+Cross-platform compatible for Windows and Linux/WSL
 """
 
 import os
@@ -10,14 +11,22 @@ import torch
 import subprocess
 import soundfile as sf
 import shutil
+import platform
 
 class OrpheusAudioEffects:
     """
     ComfyUI Node for applying audio effects (pitch, speed, reverb, echo, gain) to TTS output
-    Uses explicit SoX path for Windows compatibility
+    Cross-platform compatible for Windows and Linux/WSL environments
     """
     @classmethod
     def INPUT_TYPES(cls):
+        # Set default SoX path based on platform
+        if platform.system() == 'Windows':
+            default_sox_path = "C:\\Program Files (x86)\\sox-14-4-2\\sox.exe"
+        else:
+            # Default for Linux/WSL2
+            default_sox_path = "sox"  # Use system PATH on Linux
+        
         return {
             "required": {
                 "audio": ("AUDIO",),
@@ -27,7 +36,7 @@ class OrpheusAudioEffects:
                                "display": "slider", "label": "Speed Factor"})
             },
             "optional": {
-                "sox_path": ("STRING", {"default": "C:\\Program Files (x86)\\sox-14-4-2\\sox.exe"}),
+                "sox_path": ("STRING", {"default": default_sox_path}),
                 "gain_db": ("FLOAT", {"default": 0.0, "min": -20.0, "max": 20.0, "step": 0.5, 
                          "display": "slider", "label": "Gain (dB)"}),
                 "use_limiter": ("BOOLEAN", {"default": True, "label": "Use Limiter for Gain"}),
@@ -49,8 +58,59 @@ class OrpheusAudioEffects:
     RETURN_NAMES = ("audio",)
     FUNCTION = "process_audio"
     CATEGORY = "audio/effects"
+
+    def find_sox_executable(self, provided_path):
+        """Find the SoX executable on different platforms"""
+        # First, check if the provided path exists
+        if os.path.exists(provided_path) and os.access(provided_path, os.X_OK):
+            return provided_path
+            
+        # For Linux/WSL, check if sox is in the PATH
+        if platform.system() != "Windows":
+            # Try using 'which' command to find sox
+            try:
+                sox_path = subprocess.check_output(["which", "sox"], text=True).strip()
+                if sox_path:
+                    print(f"Found SoX at: {sox_path}")
+                    return sox_path
+            except (subprocess.SubprocessError, FileNotFoundError):
+                pass
+                
+            # Check common Linux locations
+            linux_paths = [
+                "/usr/bin/sox",
+                "/usr/local/bin/sox",
+                "/bin/sox"
+            ]
+            for path in linux_paths:
+                if os.path.exists(path) and os.access(path, os.X_OK):
+                    print(f"Found SoX at: {path}")
+                    return path
+                    
+            # If sox is not found but is specified as just "sox", return it anyway
+            # (it might be in a PATH location we couldn't directly verify)
+            if provided_path == "sox":
+                return provided_path
+        else:
+            # Windows paths to check
+            windows_paths = [
+                "C:\\Program Files (x86)\\sox-14-4-2\\sox.exe",
+                "C:\\Program Files\\sox-14-4-2\\sox.exe",
+                "C:\\Program Files (x86)\\sox-14.4.2\\sox.exe",
+                "C:\\Program Files\\sox-14.4.2\\sox.exe",
+                "C:\\Program Files (x86)\\sox\\sox.exe",
+                "C:\\Program Files\\sox\\sox.exe"
+            ]
+            
+            for path in windows_paths:
+                if os.path.exists(path):
+                    print(f"Found SoX at: {path}")
+                    return path
+                    
+        # If we get here, we couldn't find SoX
+        return None
     
-    def process_audio(self, audio, pitch_shift=0.0, speed_factor=1.0, sox_path="C:\\Program Files (x86)\\sox-14-4-2\\sox.exe",
+    def process_audio(self, audio, pitch_shift=0.0, speed_factor=1.0, sox_path=None,
                      gain_db=0.0, use_limiter=True, normalize_audio=False,
                      add_reverb=False, reverb_amount=50, reverb_room_scale=50,
                      add_echo=False, echo_delay=0.5, echo_decay=0.5):
@@ -69,29 +129,27 @@ class OrpheusAudioEffects:
             print("No effects to apply, returning original audio")
             return (audio,)
         
-        # Check if the SoX executable exists
-        if not os.path.exists(sox_path):
-            print(f"SoX executable not found at: {sox_path}")
-            print("Please provide the correct path to the sox.exe file")
-            
-            # Try some common locations
-            common_paths = [
-                "C:\\Program Files (x86)\\sox-14-4-2\\sox.exe",
-                "C:\\Program Files\\sox-14-4-2\\sox.exe",
-                "C:\\Program Files (x86)\\sox-14.4.2\\sox.exe",
-                "C:\\Program Files\\sox-14.4.2\\sox.exe",
-                "C:\\Program Files (x86)\\sox\\sox.exe",
-                "C:\\Program Files\\sox\\sox.exe"
-            ]
-            
-            for path in common_paths:
-                if os.path.exists(path):
-                    print(f"Found SoX at: {path}")
-                    sox_path = path
-                    break
+        # If sox_path is None (which shouldn't happen), set platform-specific default
+        if sox_path is None:
+            if platform.system() == "Windows":
+                sox_path = "C:\\Program Files (x86)\\sox-14-4-2\\sox.exe"
             else:
-                print("SoX not found in any common location. Please install SoX or provide the correct path.")
-                return (audio,)
+                sox_path = "sox"  # Use system PATH on Linux
+                
+        # Verify and find SoX executable
+        print(f"Trying to find SoX at: {sox_path}")
+        sox_executable = self.find_sox_executable(sox_path)
+        
+        if not sox_executable:
+            print("SoX executable not found. Please install SoX:")
+            if platform.system() == "Windows":
+                print("- Windows: Download and install from https://sourceforge.net/projects/sox/")
+                print("- Then provide the correct path to sox.exe")
+            else:
+                print("- Linux/WSL: Run 'sudo apt-get install sox'")
+            return (audio,)
+        
+        print(f"Using SoX executable: {sox_executable}")
         
         try:
             # Extract audio data and sample rate
@@ -108,7 +166,7 @@ class OrpheusAudioEffects:
             else:
                 audio_np = waveform.cpu().numpy()
             
-            print(f"Processing audio with SoX at: {sox_path}")
+            print(f"Processing audio with SoX")
             print(f"- Pitch shift: {pitch_shift} semitones")
             print(f"- Speed factor: {speed_factor}x")
             print(f"- Gain: {gain_db} dB")
@@ -135,7 +193,7 @@ class OrpheusAudioEffects:
                     return (audio,)
                 
                 # Create the SoX command with explicit parameters
-                sox_cmd = [sox_path, input_path, output_path]
+                sox_cmd = [sox_executable, input_path, output_path]
                 
                 # Add effects in the order they should be applied
                 effects = []
@@ -224,9 +282,9 @@ class OrpheusAudioEffects:
                 )
                 
                 # Print SoX output for debugging
-                if process.stdout:
+                if process.stdout and len(process.stdout.strip()) > 0:
                     print("SoX stdout:", process.stdout)
-                if process.stderr:
+                if process.stderr and len(process.stderr.strip()) > 0:
                     print("SoX stderr:", process.stderr)
                 
                 # Check if SoX command succeeded
