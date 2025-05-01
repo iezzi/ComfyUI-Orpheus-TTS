@@ -17,6 +17,7 @@ This project adds high-quality Text-to-Speech capabilities to ComfyUI using the 
   - Reverb with adjustable room size and amount
   - Echo with configurable delay and decay
 - 🌐 Optional support for private Hugging Face models
+- 💻 Cross-platform: Works on Windows, Linux/WSL, and macOS
 
 ## Installation
 
@@ -33,6 +34,11 @@ git clone https://github.com/ShmuelRonen/ComfyUI-Orpheus-TTS.git
 
 ```bash
 pip install torch numpy soundfile transformers huggingface_hub nltk snac
+```
+
+For WSL 2, you may need to install directly from the GitHub repository:
+```bash
+pip install git+https://github.com/hubertsiuzdak/snac.git
 ```
 
 ### 3. Install SoX (Required for Audio Effects)
@@ -94,7 +100,43 @@ Loads the required models for Orpheus TTS.
 **Outputs:**
 - `model`: Model reference to be passed to the generate node
 
-  ## Paralinguistic Elements
+### Orpheus TTS Generate
+
+Generates speech from text input.
+
+**Inputs:**
+- `model`: Model reference from the loader node
+- `text`: The text to convert to speech
+- `voice`: Voice style to use (tara, leah, jess, leo, dan, mia, zac, zoe, etc.)
+- `language` (optional): Language for multilingual output (en, fr, es, etc.)
+- `max_chunk_size` (optional): Maximum chunk size for long text processing
+
+**Outputs:**
+- `audio`: Audio data to be passed to preview or effects nodes
+
+### Orpheus Audio Effects
+
+Applies high-quality audio processing to the generated speech.
+
+**Inputs:**
+- `audio`: Audio data from the generate node
+- `pitch_shift`: Semitone adjustment (-12 to +12)
+- `speed_factor`: Playback speed modifier (0.5x to 2.0x)
+- `sox_path` (optional): Custom path to SoX executable
+- `gain_db` (optional): Volume adjustment in decibels
+- `use_limiter` (optional): Enable/disable limiter for positive gain
+- `normalize_audio` (optional): Enable/disable audio normalization
+- `add_reverb` (optional): Enable/disable reverb effect
+- `reverb_amount` (optional): Reverb intensity
+- `reverb_room_scale` (optional): Size of virtual space
+- `add_echo` (optional): Enable/disable echo effect
+- `echo_delay` (optional): Time between echo repetitions
+- `echo_decay` (optional): How quickly echo fades
+
+**Outputs:**
+- `audio`: Processed audio data
+
+## Paralinguistic Elements
 
 You can add expressive elements to the speech by inserting these tags:
 
@@ -151,25 +193,6 @@ Echo creates repeating sound reflections. Good settings to try:
 - **Child Voice**: pitch_shift = 4, speed_factor = 1.1, gain_db = 2
 - **Deep Voice**: pitch_shift = -4, speed_factor = 0.9, gain_db = -2
 
-## Paralinguistic Elements
-
-You can add expressive elements to the speech by inserting these tags:
-
-- **`<laugh>`** - Natural laughter
-- **`<chuckle>`** - Light, subtle laughter
-- **`<sigh>`** - Exhaling with emotion
-- **`<cough>`** - Clearing throat
-- **`<sniffle>`** - Subtle nasal sound
-- **`<groan>`** - Low, grumbling sound
-- **`<yawn>`** - Tired exhale
-- **`<gasp>`** - Sudden intake of breath
-
-### Example:
-```
-I can't believe it! <laugh> That's the funniest thing I've heard all day.
-<sigh> But now I need to get back to work.
-```
-
 ## Usage Examples
 
 ### Basic Text-to-Speech
@@ -180,7 +203,6 @@ I can't believe it! <laugh> That's the funniest thing I've heard all day.
 4. Enter your text and select voice options
 5. Connect to "Preview Audio" node to hear the result
 
-
 ### Advanced: TTS with Audio Effects
 
 1. Add "Orpheus TTS Model Loader"
@@ -189,26 +211,26 @@ I can't believe it! <laugh> That's the funniest thing I've heard all day.
 4. Connect in sequence: Model Loader → Generate → Audio Effects → Preview Audio
 5. Adjust pitch shift and speed factor sliders
 
+## Cross-Platform Compatibility
 
-## Paralinguistic Elements
+This extension has been tested and works on:
 
-You can add expressive elements to the speech by inserting these tags:
+- Windows 10/11
+- Linux (including WSL 2 on Windows)
+- macOS
 
-- **`<laugh>`** - Natural laughter
-- **`<chuckle>`** - Light, subtle laughter
-- **`<sigh>`** - Exhaling with emotion
-- **`<cough>`** - Clearing throat
-- **`<sniffle>`** - Subtle nasal sound
-- **`<groan>`** - Low, grumbling sound
-- **`<yawn>`** - Tired exhale
-- **`<gasp>`** - Sudden intake of breath
+Different environments may require specific setup steps:
 
-### Example:
-```
-I can't believe it! <laugh> That's the funniest thing I've heard all day.
-<sigh> But now I need to get back to work.
-```
+### Windows Notes
+- SoX is automatically located in standard installation directories
+- If installed elsewhere, provide the full path in the effects node
 
+### WSL 2 Notes
+- Use `pip install git+https://github.com/hubertsiuzdak/snac.git` to ensure compatibility
+- SoX is automatically located through the system PATH
+
+### macOS Notes
+- Install SoX via Homebrew for best compatibility
 
 ## SoX Troubleshooting
 
