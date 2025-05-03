@@ -136,10 +136,10 @@ Applies high-quality audio processing to the generated speech.
 **Outputs:**
 - `audio`: Processed audio data
 
+Looking at the README section you provided, I'll expand it to include information about the different element position options, including the new pipe feature:
+
 ## Paralinguistic Elements
-
 You can add expressive elements to the speech by inserting these tags:
-
 - **`<laugh>`** - Natural laughter
 - **`<chuckle>`** - Light, subtle laughter
 - **`<sigh>`** - Exhaling with emotion
@@ -149,10 +149,51 @@ You can add expressive elements to the speech by inserting these tags:
 - **`<yawn>`** - Tired exhale
 - **`<gasp>`** - Sudden intake of breath
 
-### Example:
+### Element Position Options
+The Element Position dropdown provides different ways to add these paralinguistic elements to your text:
+
+1. **None** - No automatic element insertion. You can manually type the element tags in your text where desired.
+   ```
+   I can't believe it! <laugh> That's amazing!
+   ```
+
+2. **Append** - Automatically adds the selected element at the end of your text.
+   ```
+   Input: "That's amazing!"
+   Output: "That's amazing! <laugh>"
+   ```
+
+3. **Prepend** - Automatically adds the selected element at the beginning of your text.
+   ```
+   Input: "I need to get back to work."
+   Output: "<sigh> I need to get back to work."
+   ```
+
+4. **Pipe** - Replace pipe characters (|) in your text with the selected element. This gives you precise control over element placement.
+   ```
+   Input: "I can't believe it! | That's the funniest thing | I've heard all day."
+   Element: laugh
+   Output: "I can't believe it! <laugh> That's the funniest thing <laugh> I've heard all day."
+   ```
+
+### Examples:
+
+#### Manual placement (Element Position: None):
 ```
 I can't believe it! <laugh> That's the funniest thing I've heard all day.
 <sigh> But now I need to get back to work.
+```
+
+#### Using pipe placeholders (Element Position: Pipe):
+```
+Input: "Did you hear that? | It's hilarious! | I can't stop laughing!"
+Element: laugh
+Result: "Did you hear that? <laugh> It's hilarious! <laugh> I can't stop laughing!"
+```
+
+#### Multiple elements in one text:
+```
+<gasp> What was that? <pause> Did you hear something? <sigh> Maybe I'm just tired.
 ```
 
 ## Audio Effect Tips
