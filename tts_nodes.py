@@ -44,9 +44,8 @@ ELEMENTS = [
 # Available voices
 VOICES = ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe", "bob", "rebeca", "lisa"]
 
-
 # Element positions
-ELEMENT_POSITIONS = ["none", "append", "prepend"]
+ELEMENT_POSITIONS = ["none", "append", "prepend", "pipe"]
 
 class OrpheusModelLoader:
     """
@@ -315,6 +314,11 @@ class OrpheusGenerate:
                 text = f"{text} {element_tag}"
             elif element_position == "prepend":
                 text = f"{element_tag} {text}"
+            elif element_position == "pipe":
+                # Replace all pipe characters with the selected element
+                if "|" in text:
+                    text = text.replace("|", element_tag)
+                # If no pipes found, we just leave the text as is
         
         try:
             # Check if the text is long and needs chunking
